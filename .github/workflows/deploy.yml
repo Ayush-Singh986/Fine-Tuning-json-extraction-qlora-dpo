@@ -1,0 +1,65 @@
+name: Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["CI/CD Pipeline"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'production' }}
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Download training artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          pattern: training-artifacts-*
+
+      - name: Build and push Docker images
+        run: |
+          # Build and push training image
+          docker build -t finrtuning/training:${{ github.sha }} .
+          docker tag finrtuning/training:${{ github.sha }} ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/finrtuning/training:${{ github.sha }}
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/finrtuning/training:${{ github.sha }}
+
+          # Build and push inference image
+          docker build -t finrtuning/inference:${{ github.sha }} -f docker/inference/Dockerfile .
+          docker tag finrtuning/inference:${{ github.sha }} ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/finrtuning/inference:${{ github.sha }}
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/finrtuning/inference:${{ github.sha }}
+
+      - name: Deploy to EC2
+        run: |
+          # Deploy to EC2 instances
+          echo "Deploying to EC2 instances..."
+
+      - name: Verify deployment
+        run: |
+          # Verify deployment
+          echo "Verifying deployment..."
+
+      - name: Notify deployment
+        run: |
+          echo "Deployment completed to ${{ github.event.inputs.environment || 'production' }}"

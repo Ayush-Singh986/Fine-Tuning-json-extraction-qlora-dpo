@@ -1,0 +1,125 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install black ruff mypy
+
+      - name: Check code format with Black
+        run: black --check src/ scripts/ tests/
+
+      - name: Lint with Ruff
+        run: ruff check src/ scripts/ tests/
+
+      - name: Type check with MyPy
+        run: mypy src/
+
+  tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,train,inference]"
+
+      - name: Run unit tests
+        run: pytest tests/ -v --cov=finrtuning --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+
+  validate-configs:
+    name: Validate Configurations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Validate YAML configs
+        run: |
+          python -c "import yaml; [yaml.safe_load(open(f)) for f in ['configs/data_build.yaml', 'configs/data_sources.yaml', 'configs/dpo.yaml', 'configs/eval.yaml', 'configs/inference.yaml', 'configs/model.yaml', 'configs/sft.yaml']]"
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run security scan
+        run: |
+          pip install safety
+          safety check --full-report
+
+      - name: Check for secrets
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          config-path: .gitleaks.toml
+          exit-code: 1
+
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint, tests, validate-configs, security]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build training image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/train/Dockerfile
+          push: false
+          tags: finrtuning/training:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build inference image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/inference/Dockerfile
+          push: false
+          tags: finrtuning/inference:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

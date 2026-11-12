@@ -1,275 +1,236 @@
-# JSON Extraction with QLoRA + DPO
+# Finr-Tuning - Multi-Model Fine-Tuning Platform
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](pyproject.toml)
-[![Project Type](https://img.shields.io/badge/Project-LLMOps%20Portfolio-6f42c1)](#)
-[![Task](https://img.shields.io/badge/Task-Structured%20JSON%20Extraction-0a7ea4)](#)
-[![Training](https://img.shields.io/badge/Post--Training-SFT%20%2B%20DPO-green)](#)
-[![Serving](https://img.shields.io/badge/Serving-vLLM-orange)](#)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![CI/CD](https://img.shields.io/github/actions/workflow/status/Ayush-Singh986/json-extraction-qlora-dpo/ci.yml)](https://github.com/Ayush-Singh986/json-extraction-qlora-dpo/actions)
+[![Codecov](https://img.shields.io/codecov/c/github/Ayush-Singh986/json-extraction-qlora-dpo)](https://codecov.io/gh/Ayush-Singh986/json-extraction-qlora-dpo)
 
-Production-style LLM post-training project for **schema-constrained support-ticket
-JSON extraction**.  
-This repo demonstrates an end-to-end workflow across **baseline -> SFT (QLoRA) -> DPO -> inference benchmarking** with explicit metrics, failure analysis, and reproducibility contracts.
+Production-grade ML engineering platform for multi-model fine-tuning with SFT (QLoRA), DPO, and production deployment.
 
 ---
 
-## TL;DR
+## 🚀 Quick Start
 
-- Built and evaluated a narrow extraction system with strict schema validation.
-- Achieved major semantic lift from baseline to SFT, then additional semantic +
-  schema gains from DPO.
-- Kept claims honest by separating syntax quality from semantic correctness.
-- Implemented script-first, resumable vLLM benchmarking with correctness checks.
-- Documented engineering decisions, tradeoffs, and open risks as first-class artifacts.
+### Prerequisites
 
----
+- Python 3.11+
+- PyTorch with CUDA support
+- 16GB+ GPU VRAM
 
-## Start Here
+### Installation
 
-- Final project narrative: [`artifacts/reports/final_project_report.md`](artifacts/reports/final_project_report.md)
-- Stage comparison report: [`artifacts/reports/dpo-full-colab_comparison_comparison_report.md`](artifacts/reports/dpo-full-colab_comparison_comparison_report.md)
-- Inference benchmark notebook: [`notebooks/07_vllm_benchmark_lab.ipynb`](notebooks/07_vllm_benchmark_lab.ipynb)
-- System design: [`docs/01_system_design.md`](docs/01_system_design.md)
-- Evaluation contract: [`docs/04_eval_plan.md`](docs/04_eval_plan.md)
+```bash
+cd d:\Finr-Tuning
+git clone https://github.com/Ayush-Singh986/json-extraction-qlora-dpo.git repo
+cd repo
 
----
+python -m pip install --upgrade pip
+python -m pip install -e ".[train,inference,dev]"
+```
 
-## Why This Project Matters
+### Training
 
-Most fine-tuning demos optimize for one final score and skip system rigor.  
-This repo is intentionally different:
+```bash
+# Build dataset manifests
+python scripts/build_dataset_manifests.py --profile full
 
-- narrow task definition
-- strict schema contract
-- reproducible stage artifacts
-- explicit failure cases
-- honest tradeoff reporting
+# Train SFT (QLoRA)
+python scripts/train_sft.py --config configs/sft.yaml --profile colab_full --run-name sft-full
 
-It is designed to show practical ML engineering skills recruiters look for:
-**LLMOps, PEFT, QLoRA, DPO, evaluation harness design, serving benchmarking, and artifact-first reproducibility**.
+# Build preference pairs
+python scripts/build_preference_pairs.py --config configs/dpo.yaml --profile colab_full --run-name dpo-full
 
----
+# Train DPO
+python scripts/train_dpo.py --config configs/dpo.yaml --profile colab_full --run-name dpo-full
 
-## Key Outcomes (Saved Artifacts)
+# Evaluate
+python scripts/eval_model.py --config configs/eval.yaml --run-name baseline-qwen2.5-1.5b
+```
 
-| Stage | JSON Validity | Schema Pass | Micro F1 | Macro F1 | Mean Latency (ms) |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Baseline | 0.9998 | 0.9876 | 0.3030 | 0.3008 | 10760.63 |
-| SFT | 0.9990 | 0.8492 | 0.7334 | 0.6519 | 10773.13 |
-| DPO | 0.9984 | 0.9982 | 0.7730 | 0.6871 | 16000.42 |
+### API Service
 
-Interpretation:
-- **Baseline -> SFT:** primary semantic jump.
-- **SFT -> DPO:** schema discipline repair + additional semantic gain.
-- **Cost of DPO:** materially higher latency.
+```bash
+# Start inference server
+python -m finrtuning.serving.api
 
-This is a mixed, realistic result, not a blanket "everything improved" claim.
-
-Source metrics:
-- `artifacts/metrics/baseline-qwen2.5-1.5b_metrics.json`
-- `artifacts/metrics/sft-full-colab_eval_metrics.json`
-- `artifacts/metrics/dpo-full-colab_eval_metrics.json`
+# Test inference
+curl http://localhost:8000/models
+curl http://localhost:8000/health
+```
 
 ---
 
-## Architecture (High-Level)
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture and design |
+| [DATASET_CARD.md](DATASET_CARD.md) | Dataset documentation |
+| [MODEL_CARDS.md](MODEL_CARDS.md) | Model documentation |
+| [TRAINING_GUIDE.md](TRAINING_GUIDE.md) | Training procedures |
+| [EVALUATION_GUIDE.md](EVALUATION_GUIDE.md) | Evaluation methodology |
+| [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | Deployment procedures |
+| [MONITORING_GUIDE.md](MONITORING_GUIDE.md) | Monitoring setup |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues |
+
+---
+
+## 🏗️ Architecture
 
 ```mermaid
-flowchart TD
-  RawSources[Raw Sources and Fixtures] --> DataBuild[Data Build and Canonicalization]
-  DataBuild --> Manifests[Train and Eval Manifests]
-  Manifests --> BaselineEval[Baseline Evaluation]
-  Manifests --> SFTTrain[SFT QLoRA Training]
-  SFTTrain --> PrefBuild[Preference Pair Build]
-  PrefBuild --> DPOTrain[DPO Training]
-  BaselineEval --> Compare[Stage Comparison]
-  SFTTrain --> Compare
-  DPOTrain --> Compare
-  DPOTrain --> Promote[Promoted Model Manifest]
-  Promote --> VLLMServe[vLLM Serving and Benchmark]
-  VLLMServe --> InferenceReport[Inference Benchmark Notebook]
-  Compare --> FinalReport[Final Report Notebook and Markdown]
-```
+flowchart TB
+    subgraph "Model Registry"
+        Qwen[Qwen2.5-1.5B]
+        Qwen3[Qwen3.5-2B]
+        Phi[Phi-4-mini]
+        Granite[Granite 4.2-3B]
+    end
 
-Core principle: keep execution logic in `src/` and `scripts/`, keep notebooks
-as analysis/reporting surfaces.
+    subgraph "Data Engineering"
+        Sources[Data Sources]
+        Pipeline[Data Pipeline]
+        Validate[Validation]
+        Split[Splitting]
+    end
 
----
+    subgraph "Training"
+        SFT[QLoRA/SFT]
+        DPO[DPO]
+    end
 
-## Tech Stack And Keywords
+    subgraph "Evaluation"
+        Metrics[Metrics]
+        Leaderboard[Leaderboard]
+    end
 
-- **Language/Runtime:** Python 3.11+
-- **Modeling:** Transformers, TRL, PEFT, bitsandbytes (QLoRA)
-- **Training:** SFTTrainer, DPOTrainer
-- **Validation:** Pydantic schema contracts
-- **Serving:** vLLM (OpenAI-compatible API, LoRA serving)
-- **Evaluation:** deterministic metrics + diagnostics + stage comparison
-- **Workflow:** Colab runtime + Drive persistence + local Git source of truth
+    subgraph "Serving"
+        API[FastAPI]
+        vLLM[vLLM]
+    end
 
-Keywords: `LLMOps`, `SFT`, `DPO`, `QLoRA`, `LoRA`, `vLLM`, `Pydantic`,
-`artifact-first reproducibility`, `evaluation harness`, `failure analysis`.
+    subgraph "Infrastructure"
+        AWS[AWS EC2/S3]
+        Terraform[Terraform]
+    end
 
----
-
-## AI Engineer Role Alignment
-
-This project is intentionally scoped to demonstrate responsibilities commonly
-expected in AI Engineer roles:
-
-### 1) Data And Contract Engineering
-
-- designed a strict schema-first extraction contract
-- built canonical data pipelines with source adapters and provenance tracking
-- implemented deterministic data-build checks before expensive model runs
-
-### 2) Post-Training And Model Iteration
-
-- implemented staged baseline -> SFT -> DPO workflow
-- added preference quality gates to avoid low-signal DPO training
-- preserved explicit stage-level artifacts for reproducible comparisons
-
-### 3) Evaluation And Reliability
-
-- built evaluation harness with syntax + semantic separation
-- tracked diagnostics, hallucination behavior, and field-level correctness
-- documented mixed outcomes and regressions, not just improvements
-
-### 4) Inference And Serving
-
-- integrated vLLM serving with target resolution and LoRA support
-- built workload-aware benchmark orchestration with config sweeps
-- added resume-safe benchmark checkpointing for real Colab runtime constraints
-
-### 5) Production-Oriented Engineering Habits
-
-- clear separation of source-of-truth repo vs runtime artifacts
-- script-first workflows over notebook-only logic
-- docs as first-class engineering output (decision log, failure cases, eval plan)
-
----
-
-## Skills Demonstrated (Recruiter View)
-
-- **LLM fine-tuning:** QLoRA/SFT + DPO pipelines using TRL/PEFT
-- **Model evaluation:** robust metric design, diagnostics, and evidence-backed reporting
-- **Structured outputs:** schema-constrained JSON extraction and strict validation
-- **Inference engineering:** vLLM serving, latency/throughput analysis, tail behavior interpretation
-- **System design:** reproducible runtime architecture with explicit contracts
-- **Reliability mindset:** checkpoint-resume mechanisms, fail-fast fingerprinting
-- **Communication:** decision rationale, tradeoff documentation, failure analysis
-
----
-
-## If You Are Hiring For AI Engineer
-
-Use this repo to evaluate candidate strength in:
-
-- turning ambiguous ML goals into explicit system contracts
-- building trustworthy model-improvement evidence rather than one-off scores
-- balancing quality gains against latency and operational constraints
-- designing for reproducibility in imperfect runtime environments (for example, Colab)
-- communicating technical decisions in a way cross-functional teams can trust
-
-Recommended review flow:
-
-1. start with this README outcomes and architecture
-2. verify stage metrics in `artifacts/metrics/`
-3. inspect comparison/failure narratives in `artifacts/reports/` and `docs/`
-4. review benchmark methodology in `scripts/benchmark_vllm.py` and
-   `notebooks/07_vllm_benchmark_lab.ipynb`
-
----
-
-## Repository Layout
-
-```text
-json-extraction-qlora-dpo/
-├── configs/               # Data, train, eval, and inference contracts
-├── scripts/               # CLI entrypoints for pipeline stages
-├── src/json_ft/           # Reusable package modules
-├── tests/                 # Deterministic test coverage
-├── notebooks/             # Orchestration/review notebooks
-├── data/                  # Manifests + fixtures
-├── artifacts/             # Saved small metrics/plots/reports/checkpoint metadata
-├── docs/                  # Decision, eval, failure, learning trail
-└── Makefile               # Local and Drive sync workflow helpers
+    Sources --> Pipeline
+    Pipeline --> Validate
+    Validate --> Split
+    Split --> SFT
+    Split --> DPO
+    SFT --> Metrics
+    DPO --> Metrics
+    Metrics --> Leaderboard
+    API --> vLLM
+    AWS --> SFT
+    AWS --> DPO
+    AWS --> API
 ```
 
 ---
 
-## Reproducibility Workflow
+## 📊 Performance Metrics
 
-### 1) Local development
+| Model | JSON Validity | Schema Pass | Micro F1 | Latency (ms) |
+|-------|--------------:|------------:|---------:|-------------:|
+| Qwen2.5-1.5B | 0.9998 | 0.9876 | 0.3030 | 10,760 |
+| Qwen2.5-1.5B + SFT | 0.9990 | 0.8492 | 0.7334 | 10,773 |
+| Qwen2.5-1.5B + DPO | 0.9984 | 0.9982 | 0.7730 | 16,000 |
+
+---
+
+## 🧰 Tech Stack
+
+- **Python** - Core language
+- **PyTorch** - Deep learning framework
+- **Transformers** - Hugging Face models
+- **PEFT** - LoRA adapters
+- **BitsAndBytes** - 4-bit quantization
+- **TRL** - SFT/DPO training
+- **vLLM** - High-performance inference
+- **FastAPI** - REST API
+- **MLflow** - Experiment tracking
+- **AWS EC2/S3** - Cloud infrastructure
+- **Terraform** - IaC
+- **Prometheus/Grafana** - Monitoring
+
+---
+
+## 🛠️ Development
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
-```
+# Install development dependencies
+pip install -e ".[dev]"
 
-### 2) Drive-backed Colab flow
+# Run tests
+pytest tests/ -v --cov=finrtuning
 
-```bash
-make drive-init
-make drive-push-source
-```
+# Format code
+black src/ scripts/ tests/
 
-Then in Colab:
-1. run `notebooks/00_colab_setup.ipynb`
-2. build manifests (`scripts/build_dataset_manifests.py --profile full`)
-3. run stage notebooks/scripts (baseline, SFT, preference, DPO, compare)
-4. run benchmark (`scripts/benchmark_vllm.py`)
+# Lint
+ruff check src/ scripts/ tests/
 
-Pull small artifacts back:
-
-```bash
-make drive-pull-artifacts
+# Type check
+mypy src/
 ```
 
 ---
 
-## Inference Benchmarking
+## 📂 Repository Structure
 
-Inference workflow is script-first and resumable:
-
-- promptset generation:
-  - `scripts/build_benchmark_promptsets.py`
-- health checks:
-  - `scripts/check_vllm_health.py`
-- benchmark orchestration:
-  - `scripts/benchmark_vllm.py`
-- report rendering:
-  - `scripts/render_benchmark_report.py`
-
-Primary analysis surface:
-- `notebooks/07_vllm_benchmark_lab.ipynb`
-
-Benchmark run bundle lives in runtime storage:
-- `json-ft-runs/persistent/benchmark/<run_name>/bundle.json`
-
----
-
-## Quality And Honesty Policy
-
-- Never claim improvement without saved metrics.
-- Keep syntax and semantic gains separate.
-- Treat row-level failures as first-class evidence, not exceptions.
-- Report latency costs along with quality gains.
-- Preserve reproducibility with explicit paths, contracts, and artifacts.
+```
+d:\Finr-Tuning\repo\
+├── configs/              # Configuration files
+├── scripts/              # CLI scripts
+├── src/finrtuning/       # Python package
+│   ├── config/          # Configuration management
+│   ├── data/            # Data engineering
+│   ├── models/          # Model registry
+│   ├── training/        # Training modules
+│   ├── evaluation/      # Evaluation framework
+│   ├── tracking/        # MLflow integration
+│   ├── serving/         # FastAPI service
+│   └── leaderboard/     # Model selection
+├── infrastructure/      # AWS/Terraform configs
+│   └── aws/            # Terraform modules
+├── .github/workflows/   # CI/CD pipelines
+├── tests/               # Unit tests
+├── Dockerfile           # Docker image
+├── Makefile             # Development helpers
+└── README.md            # This file
+```
 
 ---
 
-## Ownership
+## 🤝 Contributing
 
-This is a solo portfolio project built as both:
-- a practical ML systems artifact
-- a learning trail with explicit design rationale and postmortems
+1. Fork the repository
+2. Create a feature branch
+3. Make changes and add tests
+4. Run `pytest tests/ -v`
+5. Submit a pull request
 
 ---
 
-## What Is Intentionally Not Included
+## 📄 License
 
-- Committed large model weights/checkpoints
-- Full raw external datasets in Git
-- Inflated claims without artifact proof
+MIT License - see [LICENSE](LICENSE) file.
 
+---
+
+## 👤 Author
+
+**Ayush Singh** - AI Engineer
+
+---
+
+## 🙏 Acknowledgments
+
+- Qwen team for open-weight model release
+- Hugging Face for ecosystem tools
+- vLLM team for high-performance inference
+
+---
+
+**Built for ML Engineering Demos and Recruiter Interviews**

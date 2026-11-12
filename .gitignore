@@ -33,3 +33,10 @@ runtime/
 # OS/editor noise
 .DS_Store
 .vscode/
+
+# Infrastructure artifacts (don't commit secrets)
+infrastructure/aws/*.tfstate
+infrastructure/aws/*.tfstate.*
+infrastructure/aws/.terraform/
+infrastructure/docker/*.env
+infrastructure/docker/.env.*

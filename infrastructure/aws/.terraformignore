@@ -1,0 +1,18 @@
+# Terraform ignore file
+# Files to exclude from terraform operations
+
+# Credentials and secrets
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Large files
+*.h5
+*.bin
+*.pb
+
+# Logs
+*.log
+__pycache__/

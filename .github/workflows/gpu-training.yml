@@ -1,0 +1,94 @@
+name: GPU Training
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Model to train'
+        required: true
+        default: 'qwen2.5-1.5b-instruct'
+      profile:
+        description: 'Training profile'
+        required: true
+        default: 'colab_full'
+      run_name:
+        description: 'Run name'
+        required: true
+        default: 'gpu-training'
+
+jobs:
+  gpu-training:
+    name: Train Model on GPU
+    runs-on: [self-hosted, gpu]
+    environment: training
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[train]"
+
+      - name: Build dataset manifests
+        run: |
+          python scripts/build_dataset_manifests.py \
+            --config configs/data_build.yaml \
+            --profile full
+
+      - name: Train SFT model
+        run: |
+          python scripts/train_sft.py \
+            --config configs/sft.yaml \
+            --profile ${{ github.event.inputs.profile }} \
+            --run-name ${{ github.event.inputs.run_name }}_sft \
+            --model-name ${{ github.event.inputs.model }}
+
+      - name: Build preference pairs
+        run: |
+          python scripts/build_preference_pairs.py \
+            --config configs/dpo.yaml \
+            --profile ${{ github.event.inputs.profile }} \
+            --run-name ${{ github.event.inputs.run_name }}_preference
+
+      - name: Train DPO model
+        run: |
+          python scripts/train_dpo.py \
+            --config configs/dpo.yaml \
+            --profile ${{ github.event.inputs.profile }} \
+            --run-name ${{ github.event.inputs.run_name }}_dpo
+
+      - name: Evaluate trained models
+        run: |
+          python scripts/eval_model.py \
+            --config configs/eval.yaml \
+            --run-name ${{ github.event.inputs.run_name }}_eval
+
+      - name: Generate comparison report
+        run: |
+          python scripts/compare_stages.py \
+            --config configs/eval.yaml \
+            --run-name ${{ github.event.inputs.run_name }}
+
+      - name: Export final report
+        run: |
+          python scripts/export_final_report.py \
+            --run-name ${{ github.event.inputs.run_name }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-artifacts-${{ github.event.inputs.run_name }}
+          path: |
+            artifacts/metrics/
+            artifacts/plots/
+            artifacts/reports/
+          retention-days: 30
+
+      - name: Notify completion
+        run: |
+          echo "Training completed for model: ${{ github.event.inputs.model }}"

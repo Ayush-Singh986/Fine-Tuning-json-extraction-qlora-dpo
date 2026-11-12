@@ -1,0 +1,23 @@
+[extend]
+# Use default config
+useDefault = true
+
+[allowlist]
+# Files and paths to exclude
+paths = [
+  '''test_data/''',
+  '''fixtures/''',
+  '''docs/.*\.md$''',
+]
+
+# Regexes to exclude
+regexes = [
+  '''placeholder''',
+  '''example''',
+]
+
+# Commits to exclude
+commits = []
+
+# stopwords
+stopwords = []
