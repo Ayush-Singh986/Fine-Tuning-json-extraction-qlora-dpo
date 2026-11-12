@@ -482,6 +482,10 @@ def _skip_reason_for_quality_gates(
 
 def _load_pyplot():
     try:
+        import matplotlib
+
+        # Use non-interactive backend to avoid tkinter issues on Windows
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ModuleNotFoundError as exc:  # pragma: no cover - exercised in live environments
         raise RuntimeError(

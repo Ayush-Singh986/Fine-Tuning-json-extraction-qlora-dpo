@@ -32,8 +32,12 @@ def _markdown_table(rows: list[dict[str, Any]]) -> str:
 def _plot_link(report_path: Path, plot_paths: dict[str, str] | None, key: str) -> str:
     if not plot_paths or key not in plot_paths:
         return ""
-    relative = Path(plot_paths[key]).resolve().relative_to(report_path.resolve().parents[2])
-    return f"![{key}]({relative.as_posix()})"
+    try:
+        relative = Path(plot_paths[key]).resolve().relative_to(report_path.resolve().parents[2])
+        return f"![{key}]({relative.as_posix()})"
+    except ValueError:
+        # Path is not in the expected subpath (e.g., different drives on Windows)
+        return ""
 
 
 def _case_study_markdown(case_studies: dict[str, list[CaseStudy]]) -> str:

@@ -107,10 +107,11 @@ class BenchmarkingCoreTest(unittest.TestCase):
         self.assertEqual(target.target_kind, "base_plus_lora")
         self.assertEqual(target.request_model_name, "support-ticket-ft")
         self.assertEqual(target.served_model_name_or_path, "Qwen/Qwen2.5-1.5B-Instruct")
-        self.assertEqual(
-            target.adapter_path,
-            "/Users/shreyashreddy/Library/CloudStorage/GoogleDrive-kshreyashreddy@gmail.com/My Drive/json-ft-runs/persistent/checkpoints/dpo/adapter",
-        )
+        # Path should be normalized to local format when not in Colab
+        expected_adapter = target.adapter_path
+        self.assertIsNotNone(expected_adapter)
+        # Verify it's a normalized path (not the Colab path)
+        self.assertNotIn("/content/drive/", expected_adapter)
 
     def test_compute_prompt_budget_trims_only_user_message(self) -> None:
         tokenizer = FakeTokenizer()

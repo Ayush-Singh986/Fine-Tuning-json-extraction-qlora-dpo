@@ -12,6 +12,10 @@ from .utils import read_json, write_json, write_text
 
 def _load_pyplot() -> Any:
     try:
+        import matplotlib
+
+        # Use non-interactive backend to avoid tkinter issues on Windows
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ModuleNotFoundError as exc:  # pragma: no cover - dependency-backed
         raise RuntimeError(

@@ -13,6 +13,10 @@ from .tables import build_field_level_table
 
 def _load_pyplot():
     try:
+        import matplotlib
+
+        # Use non-interactive backend to avoid tkinter issues on Windows
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ModuleNotFoundError as exc:
         raise RuntimeError(
